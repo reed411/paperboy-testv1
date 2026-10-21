@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Paperboy Anime Roguelike</title>
   <style>
-    * { box-sizing: border-box; touch-action: manipulation; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background: #87CEEB; }
+    * { box-sizing: border-box; touch-action: manipulation; margin: 0; padding: 0; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #87CEEB; }
     
     #gameCanvas {
       position: absolute;
@@ -68,7 +68,9 @@
       font-weight: bold;
       font-size: 13px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+      cursor: pointer;
     }
+    button:active { transform: scale(0.95); }
 
     .btn-pedal { background: #ff9f1c; padding: 16px 20px; font-size: 15px; }
     .btn-throw { background: #e71d36; padding: 16px 20px; font-size: 15px; }
@@ -128,6 +130,35 @@
       let hp = 3, score = 0, rpm = 0, distance = 0;
       let playerX = 0;
 
+      // Audio synth
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      function playTone(freq, duration = 0.1) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      }
+
+      // Houses array & Papers array
+      let houses = [];
+      let papers = [];
+
+      function spawnHouse() {
+        const side = Math.random() > 0.5 ? 'right' : 'left';
+        houses.push({
+          z: 1000, // Distance ahead
+          side: side,
+          delivered: false,
+          color: side === 'right' ? '#f4a261' : '#e76f51'
+        });
+      }
+
       function resize() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -147,12 +178,28 @@
       };
 
       window.manualPedal = function() {
-        rpm = Math.min(130, rpm + 15);
+        rpm = Math.min(140, rpm + 15);
+        playTone(200 + rpm * 2, 0.05);
       };
 
       window.throwPaper = function() {
-        score += 100;
-        document.getElementById('score').innerText = String(score).padStart(5, '0');
+        playTone(500, 0.1);
+        papers.push({
+          x: canvas.width / 2,
+          y: canvas.height - 80,
+          vx: (Math.random() - 0.5) * 8 + (houses.length > 0 && houses[0].side === 'right' ? 8 : -8),
+          vy: -12,
+          life: 30
+        });
+
+        // Check delivery hit on nearest house
+        const target = houses.find(h => h.z < 300 && h.z > 50 && !h.delivered);
+        if (target) {
+          target.delivered = true;
+          score += 250;
+          document.getElementById('score').innerText = String(score).padStart(5, '0');
+          playTone(880, 0.2); // Hit jingle
+        }
       };
 
       window.connectBLE = async function() {
@@ -193,15 +240,24 @@
         }
       };
 
-      // Cadence decay loop
+      // Spawning loop
+      setInterval(() => {
+        if (rpm > 10 && Math.random() > 0.4) {
+          spawnHouse();
+        }
+      }, 1500);
+
+      // Decay loop
       setInterval(() => {
         rpm = Math.max(0, rpm - 2);
-        distance += rpm * 0.05;
         document.getElementById('rpm').innerText = Math.round(rpm);
       }, 150);
 
       // Render Loop
       function render() {
+        const speed = rpm * 0.15;
+        distance += speed;
+
         // Sky
         ctx.fillStyle = '#87CEEB';
         ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
@@ -211,24 +267,78 @@
         ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
 
         // Road
+        const roadTopY = canvas.height * 0.45;
         ctx.fillStyle = '#e9d8a6';
         ctx.beginPath();
-        ctx.moveTo(canvas.width * 0.48, canvas.height * 0.45);
-        ctx.lineTo(canvas.width * 0.52, canvas.height * 0.45);
+        ctx.moveTo(canvas.width * 0.48, roadTopY);
+        ctx.lineTo(canvas.width * 0.52, roadTopY);
         ctx.lineTo(canvas.width * 0.85, canvas.height);
         ctx.lineTo(canvas.width * 0.15, canvas.height);
         ctx.fill();
 
-        // Center line
+        // Road Lines
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.setLineDash([20, 20]);
         ctx.lineDashOffset = -distance % 40;
-        ctx.moveTo(canvas.width * 0.5, canvas.height * 0.45);
+        ctx.moveTo(canvas.width * 0.5, roadTopY);
         ctx.lineTo(canvas.width * 0.5, canvas.height);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // Render & Move Houses
+        for (let i = houses.length - 1; i >= 0; i--) {
+          let h = houses[i];
+          h.z -= speed * 12 + 2;
+
+          if (h.z <= 0) {
+            houses.splice(i, 1);
+            continue;
+          }
+
+          let scale = 1 - (h.z / 1000);
+          if (scale < 0.1) continue;
+
+          let houseY = roadTopY + (canvas.height - roadTopY) * scale;
+          let roadWidthAtY = (canvas.width * 0.7) * scale;
+          let houseX = h.side === 'right' 
+            ? (canvas.width / 2) + (roadWidthAtY / 2) + (40 * scale)
+            : (canvas.width / 2) - (roadWidthAtY / 2) - (120 * scale);
+
+          let width = 80 * scale;
+          let height = 60 * scale;
+
+          // House Body
+          ctx.fillStyle = h.delivered ? '#2ec4b6' : h.color;
+          ctx.fillRect(houseX, houseY - height, width, height);
+
+          // Roof
+          ctx.fillStyle = '#264653';
+          ctx.beginPath();
+          ctx.moveTo(houseX - 5 * scale, houseY - height);
+          ctx.lineTo(houseX + width / 2, houseY - height - (30 * scale));
+          ctx.lineTo(houseX + width + 5 * scale, houseY - height);
+          ctx.fill();
+
+          // Mailbox
+          ctx.fillStyle = h.delivered ? '#ffb703' : '#e71d36';
+          let mbX = h.side === 'right' ? houseX - (15 * scale) : houseX + width + (5 * scale);
+          ctx.fillRect(mbX, houseY - (25 * scale), 12 * scale, 20 * scale);
+        }
+
+        // Render Flying Newspapers
+        for (let i = papers.length - 1; i >= 0; i--) {
+          let p = papers[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life--;
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(p.x, p.y, 12, 8);
+
+          if (p.life <= 0) papers.splice(i, 1);
+        }
 
         requestAnimationFrame(render);
       }
