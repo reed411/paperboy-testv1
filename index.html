@@ -120,7 +120,6 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Force canvas pixel resolution to match window dimensions cleanly
     function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -141,7 +140,7 @@
     let startTouch = { x: 0, y: 0 };
     let currentTouch = { x: 0, y: 0 };
 
-    // Built-in Chiptune Music Engine
+    // Air Zonk-inspired TurboGrafx-16 Chiptune Engine
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let musicInterval = null;
 
@@ -149,22 +148,50 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
       if (musicInterval) return;
 
-      const notes = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440];
+      // High-energy 16-bit arcade lead melody sequence
+      const melody = [
+        330, 330, 392, 330, 261.63, 293.66, 330, 392,
+        440, 392, 330, 293.66, 261.63, 220, 261.63, 293.66,
+        330, 392, 440, 523.25, 440, 392, 330, 293.66,
+        261.63, 293.66, 330, 293.66, 220, 220, 246.94, 261.63
+      ];
+      
+      const bassline = [
+        110, 110, 82.41, 82.41, 98, 98, 130.81, 130.81
+      ];
+
       let step = 0;
       musicInterval = setInterval(() => {
         if (gameOver) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'square';
-        osc.frequency.value = notes[step % notes.length];
-        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.15);
+        
+        // Lead Channel (Square wave for crisp PC Engine chip sound)
+        const lead = audioCtx.createOscillator();
+        const leadGain = audioCtx.createGain();
+        lead.type = 'square';
+        lead.frequency.value = melody[step % melody.length];
+        leadGain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        leadGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+        lead.connect(leadGain);
+        leadGain.connect(audioCtx.destination);
+        lead.start();
+        lead.stop(audioCtx.currentTime + 0.12);
+
+        // Bass Channel (Sawtooth wave for punchy rhythm)
+        if (step % 2 === 0) {
+          const bass = audioCtx.createOscillator();
+          const bassGain = audioCtx.createGain();
+          bass.type = 'sawtooth';
+          bass.frequency.value = bassline[(step / 2) % bassline.length];
+          bassGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+          bassGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+          bass.connect(bassGain);
+          bassGain.connect(audioCtx.destination);
+          bass.start();
+          bass.stop(audioCtx.currentTime + 0.2);
+        }
+
         step++;
-      }, 200);
+      }, 125); // Fast, driving arcade tempo
     }
 
     window.addEventListener('pointerdown', () => startMusic(), { once: true });
