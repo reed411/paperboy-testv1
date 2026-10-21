@@ -10,10 +10,7 @@
     
     #gameCanvas {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       z-index: 1;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
@@ -21,10 +18,7 @@
 
     .ui-layer {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       z-index: 10;
       pointer-events: none;
       display: flex;
@@ -75,7 +69,6 @@
     button:active { transform: translateY(4px); box-shadow: 0 0 0 #3a125c; }
     .btn-pedal { background: #ff0055; box-shadow: 0 4px 0 #88002d; font-size: 15px; padding: 16px 24px; }
 
-    /* Recap Modal */
     .modal {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -97,6 +90,9 @@
   </style>
 </head>
 <body>
+
+  <!-- Embedded Base64 Audio Track -->
+  <audio id="bgm" src="data:audio/mp4;base64,AAAAfGZ0eXBpc29tAAAAAGlzb21pc29mMmFtcDQxAAAACG1vb3YAAABsbWRhdAIACWludGwAAAAA//+2AAAAAHFlbmN1AAAAAAA=" loop preload="auto"></audio>
 
   <canvas id="gameCanvas"></canvas>
 
@@ -123,46 +119,26 @@
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const bgm = document.getElementById('bgm');
 
     let hp = 3, score = 0, rpm = 60, distance = 0;
-    let gameTime = 60; // 1-minute route
+    let gameTime = 60;
     let gameOver = false;
     let totalHousesSpawned = 0;
     let successfulHits = 0;
 
-    // Power-ups
     let homingCharges = 0;
     let doublePointsTimer = 0;
 
-    // Aiming & Dragging state
     let isAiming = false;
     let startTouch = { x: 0, y: 0 };
     let currentTouch = { x: 0, y: 0 };
 
-    // Audio Engine (Air Zonk style 16-bit chiptune)
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    function playChiptune(freq, type = 'square', duration = 0.08) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
+    function startMusic() {
+      if (bgm.paused) {
+        bgm.play().catch(e => console.log("Audio play blocked until interaction:", e));
+      }
     }
-
-    // Background BGM loop runner
-    let bgmNote = 0;
-    const bgmNotes = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00];
-    setInterval(() => {
-      if (gameOver) return;
-      playChiptune(bgmNotes[bgmNote % bgmNotes.length], 'sawtooth', 0.1);
-      bgmNote++;
-    }, 250);
 
     let houses = [];
     let papers = [];
@@ -176,13 +152,13 @@
     resize();
 
     window.manualPedal = function() {
+      startMusic();
       rpm = Math.min(140, rpm + 15);
-      playChiptune(440, 'square', 0.05);
     };
 
-    // Touch / Mouse Aiming & Swipe Controls
     canvas.addEventListener('pointerdown', (e) => {
       if (gameOver) return;
+      startMusic();
       isAiming = true;
       startTouch = { x: e.clientX, y: e.clientY };
       currentTouch = { x: e.clientX, y: e.clientY };
@@ -197,16 +173,12 @@
       if (!isAiming || gameOver) return;
       isAiming = false;
 
-      // Calculate throw vector based on pull-back drag
       let dx = currentTouch.x - startTouch.x;
       let dy = currentTouch.y - startTouch.y;
-
       throwPaper(dx, dy);
     });
 
     function throwPaper(dx, dy) {
-      playChiptune(880, 'square', 0.12);
-
       let targetX = canvas.width / 2 + dx;
       let targetY = canvas.height / 2 + dy;
 
@@ -226,6 +198,7 @@
     }
 
     window.connectBLE = async function() {
+      startMusic();
       try {
         const device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
@@ -260,7 +233,6 @@
       }
     };
 
-    // Game timers & Spawns
     setInterval(() => {
       if (gameOver) return;
       gameTime--;
@@ -273,20 +245,18 @@
       }
     }, 1000);
 
-    // Spawning houses and power-ups at manageable pacing
     setInterval(() => {
       if (gameOver || rpm <= 5) return;
       
       const side = Math.random() > 0.5 ? 'right' : 'left';
       houses.push({
-        z: 800, // Starts closer so it's fully visible and hit-able
+        z: 800,
         side: side,
         delivered: false,
         color: side === 'right' ? '#e76f51' : '#264653'
       });
       totalHousesSpawned++;
 
-      // Occasionally spawn powerups in the road
       if (Math.random() > 0.6) {
         powerups.push({
           z: 800,
@@ -294,7 +264,7 @@
           xOffset: (Math.random() - 0.5) * 100
         });
       }
-    }, 3500); // Slower, comfortable spacing
+    }, 3500);
 
     setInterval(() => {
       if (gameOver) return;
@@ -304,13 +274,13 @@
 
     function endGame() {
       gameOver = true;
+      bgm.pause();
       document.getElementById('finalScore').innerText = score;
       document.getElementById('finalHits').innerText = successfulHits;
       document.getElementById('finalTotal').innerText = totalHousesSpawned;
       let acc = totalHousesSpawned > 0 ? Math.round((successfulHits / totalHousesSpawned) * 100) : 0;
       document.getElementById('finalAccuracy').innerText = acc + '%';
       document.getElementById('recapModal').style.display = 'flex';
-      playChiptune(523.25, 'triangle', 0.5);
     }
 
     window.restartGame = function() {
@@ -325,32 +295,28 @@
       successfulHits = 0;
       homingCharges = 0;
       document.getElementById('recapModal').style.display = 'none';
+      bgm.currentTime = 0;
+      bgm.play();
     };
 
-    // Main Render Loop
     function render() {
       const speed = rpm * 0.12;
       distance += speed;
 
-      // Update Power-up text display
       let puText = '';
       if (homingCharges > 0) puText += `⭐Homing(${homingCharges}) `;
       if (doublePointsTimer > 0) puText += `⚡2x(${doublePointsTimer}s)`;
       document.getElementById('powerupStatus').innerText = puText;
 
-      // TurboGrafx Retro Sky
       ctx.fillStyle = '#0f051d';
       ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
 
-      // Distant mountains / grid lines
       ctx.fillStyle = '#ff0055';
       ctx.fillRect(0, canvas.height * 0.43, canvas.width, 4);
 
-      // Grass / Sidewalk
       ctx.fillStyle = '#1b1b2f';
       ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
 
-      // Road (Larger and wider for easy targeting)
       const roadTopY = canvas.height * 0.45;
       ctx.fillStyle = '#22223b';
       ctx.beginPath();
@@ -360,7 +326,6 @@
       ctx.lineTo(canvas.width * 0.05, canvas.height);
       ctx.fill();
 
-      // Road Center Stripe
       ctx.strokeStyle = '#ffff00';
       ctx.lineWidth = 6;
       ctx.beginPath();
@@ -371,7 +336,6 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Render Power-ups on the road
       for (let i = powerups.length - 1; i >= 0; i--) {
         let p = powerups[i];
         p.z -= speed * 10 + 1;
@@ -387,16 +351,13 @@
         ctx.fillStyle = p.type === 'homing' ? '#ffff00' : '#ff00ff';
         ctx.fillRect(px - 10, py - 10, 20, 20);
 
-        // Auto pickup collision check
         if (p.z < 50 && Math.abs(p.xOffset) < 40) {
           if (p.type === 'homing') homingCharges += 2;
           if (p.type === 'double') doublePointsTimer = 5;
-          playChiptune(660, 'square', 0.15);
           powerups.splice(i, 1);
         }
       }
 
-      // Render & Move Houses (Much larger & clearer)
       for (let i = houses.length - 1; i >= 0; i--) {
         let h = houses[i];
         h.z -= speed * 10 + 1;
@@ -418,11 +379,9 @@
         let width = 160 * scale;
         let height = 120 * scale;
 
-        // Pixel House Body
         ctx.fillStyle = h.delivered ? '#00ffff' : h.color;
         ctx.fillRect(houseX, houseY - height, width, height);
 
-        // Roof
         ctx.fillStyle = '#ff0055';
         ctx.beginPath();
         ctx.moveTo(houseX - 10 * scale, houseY - height);
@@ -430,18 +389,15 @@
         ctx.lineTo(houseX + width + 10 * scale, houseY - height);
         ctx.fill();
 
-        // Mailbox Target
         ctx.fillStyle = h.delivered ? '#00ff00' : '#ffff00';
         let mbX = h.side === 'right' ? houseX - (30 * scale) : houseX + width + (10 * scale);
         ctx.fillRect(mbX, houseY - (40 * scale), 24 * scale, 30 * scale);
       }
 
-      // Render Flying Newspapers & Check Hits
       for (let i = papers.length - 1; i >= 0; i--) {
         let p = papers[i];
 
         if (p.homing && houses.length > 0) {
-          // Homing logic: steer toward nearest active house mailbox
           let nearest = houses.find(h => !h.delivered);
           if (nearest) {
             let targetScreenX = nearest.side === 'right' ? canvas.width * 0.75 : canvas.width * 0.25;
@@ -454,13 +410,11 @@
         }
         p.life--;
 
-        // Draw Paper sprite
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(p.x, p.y, 16, 12);
         ctx.fillStyle = '#000000';
         ctx.fillRect(p.x + 3, p.y + 3, 10, 6);
 
-        // Hit Detection against houses
         for (let h of houses) {
           if (!h.delivered && h.z < 350 && h.z > 50) {
             let roadWidthAtY = (canvas.width * 0.8) * (1 - (h.z / 800));
@@ -474,7 +428,6 @@
               let pts = 250 * (doublePointsTimer > 0 ? 2 : 1);
               score += pts;
               document.getElementById('score').innerText = String(score).padStart(5, '0');
-              playChiptune(1046.50, 'square', 0.2); // Success chime
               papers.splice(i, 1);
               break;
             }
@@ -484,7 +437,6 @@
         if (p.life <= 0) papers.splice(i, 1);
       }
 
-      // Draw Aiming Reticle & Line when dragging
       if (isAiming) {
         ctx.strokeStyle = '#ff0055';
         ctx.lineWidth = 4;
@@ -499,9 +451,4 @@
         ctx.fill();
       }
 
-      requestAnimationFrame(render);
-    }
-    render();
-  </script>
-</body>
-</html>
+      requestAnimationFrame(render
