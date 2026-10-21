@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Paperboy Anime Roguelike</title>
+  <title>Turbo Paperboy 16</title>
   <style>
-    * { box-sizing: border-box; touch-action: manipulation; margin: 0; padding: 0; user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #87CEEB; }
+    * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #111; }
     
     #gameCanvas {
       position: absolute;
@@ -15,6 +15,8 @@
       width: 100%;
       height: 100%;
       z-index: 1;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
 
     .ui-layer {
@@ -28,7 +30,7 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 16px;
+      padding: 12px;
     }
 
     .hud {
@@ -38,13 +40,15 @@
     }
 
     .card {
-      background: #ffffff;
-      padding: 10px 14px;
-      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #ff0055;
+      padding: 8px 12px;
+      border-radius: 4px;
       font-weight: bold;
-      color: #2c3e50;
-      font-size: 14px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      color: #00ffff;
+      font-size: 13px;
+      text-shadow: 2px 2px #000;
+      box-shadow: 0 0 10px rgba(255,0,85,0.4);
     }
 
     .controls {
@@ -55,44 +59,41 @@
       width: 100%;
     }
 
-    .btn-col { display: flex; flex-direction: column; gap: 8px; }
-    .btn-row { display: flex; gap: 8px; }
-
     button {
       pointer-events: auto;
-      padding: 12px 16px;
-      border-radius: 20px;
+      padding: 12px 18px;
+      border-radius: 6px;
       border: 2px solid #fff;
-      background: #2ec4b6;
+      background: #7928ca;
       color: white;
       font-weight: bold;
       font-size: 13px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 4px 0 #3a125c;
       cursor: pointer;
     }
-    button:active { transform: scale(0.95); }
+    button:active { transform: translateY(4px); box-shadow: 0 0 0 #3a125c; }
+    .btn-pedal { background: #ff0055; box-shadow: 0 4px 0 #88002d; font-size: 15px; padding: 16px 24px; }
 
-    .btn-pedal { background: #ff9f1c; padding: 16px 20px; font-size: 15px; }
-    .btn-throw { background: #e71d36; padding: 16px 20px; font-size: 15px; }
-
-    #logConsole {
+    /* Recap Modal */
+    .modal {
       position: absolute;
-      top: 70px;
-      left: 16px;
-      right: 16px;
-      height: 180px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 2px solid #38bdf8;
-      border-radius: 10px;
-      color: #38bdf8;
-      font-family: monospace;
-      font-size: 11px;
-      padding: 10px;
-      overflow-y: auto;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9);
       display: none;
-      z-index: 20;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       pointer-events: auto;
+      z-index: 100;
+      color: #00ffff;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      padding: 20px;
     }
+    .modal h1 { color: #ff0055; font-size: 28px; margin-bottom: 15px; text-shadow: 3px 3px #000; }
+    .modal p { font-size: 16px; margin: 8px 0; color: #fff; }
+    .modal button { margin-top: 20px; background: #00ffff; color: #000; border: 2px solid #fff; font-size: 16px; }
   </style>
 </head>
 <body>
@@ -101,247 +102,406 @@
 
   <div class="ui-layer">
     <div class="hud">
-      <div class="card">❤️ HP: <span id="hp">3</span> | ⭐ <span id="score">00000</span></div>
-      <div class="card">🚴 <span id="rpm">0</span> RPM</div>
+      <div class="card">❤️ <span id="hp">3</span> | ⭐ <span id="score">00000</span><br>⏱️ <span id="timer">60</span>s</div>
+      <div class="card">🚴 <span id="rpm">0</span> RPM<br><span id="powerupStatus" style="color:#ff00ff"></span></div>
     </div>
 
     <div class="controls">
-      <div class="btn-col">
-        <button onclick="connectBLE()">🚲 CONNECT SENSOR</button>
-        <button onclick="toggleLogs()">📋 BLE LOGS</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn-pedal" onclick="manualPedal()">PEDAL</button>
-        <button class="btn-throw" onclick="throwPaper()">THROW</button>
-      </div>
+      <button onclick="connectBLE()">🚲 SENSOR</button>
+      <button class="btn-pedal" onclick="manualPedal()">PEDAL</button>
     </div>
   </div>
 
-  <div id="logConsole">
-    <div>> Debug Console Ready.</div>
+  <div id="recapModal" class="modal">
+    <h1>ROUTE COMPLETE!</h1>
+    <p>Final Score: <span id="finalScore">0</span></p>
+    <p>Deliveries Hit: <span id="finalHits">0</span> / <span id="finalTotal">0</span></p>
+    <p>Accuracy: <span id="finalAccuracy">0%</span></p>
+    <button onclick="restartGame()">RIDE AGAIN</button>
   </div>
 
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      const canvas = document.getElementById('gameCanvas');
-      const ctx = canvas.getContext('2d');
-      const logConsole = document.getElementById('logConsole');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-      let hp = 3, score = 0, rpm = 60, distance = 0; // Default to 60 RPM
-      let lastHouseSpawnTime = performance.now();
+    let hp = 3, score = 0, rpm = 60, distance = 0;
+    let gameTime = 60; // 1-minute route
+    let gameOver = false;
+    let totalHousesSpawned = 0;
+    let successfulHits = 0;
 
-      // Audio synth
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      function playTone(freq, duration = 0.1) {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
-      }
+    // Power-ups
+    let homingCharges = 0;
+    let doublePointsTimer = 0;
 
-      let houses = [];
-      let papers = [];
+    // Aiming & Dragging state
+    let isAiming = false;
+    let startTouch = { x: 0, y: 0 };
+    let currentTouch = { x: 0, y: 0 };
 
-      function spawnHouse() {
-        const side = Math.random() > 0.5 ? 'right' : 'left';
-        houses.push({
-          z: 1000,
-          side: side,
-          delivered: false,
-          color: side === 'right' ? '#f4a261' : '#e76f51'
+    // Audio Engine (Air Zonk style 16-bit chiptune)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playChiptune(freq, type = 'square', duration = 0.08) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // Background BGM loop runner
+    let bgmNote = 0;
+    const bgmNotes = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00];
+    setInterval(() => {
+      if (gameOver) return;
+      playChiptune(bgmNotes[bgmNote % bgmNotes.length], 'sawtooth', 0.1);
+      bgmNote++;
+    }, 250);
+
+    let houses = [];
+    let papers = [];
+    let powerups = [];
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.manualPedal = function() {
+      rpm = Math.min(140, rpm + 15);
+      playChiptune(440, 'square', 0.05);
+    };
+
+    // Touch / Mouse Aiming & Swipe Controls
+    canvas.addEventListener('pointerdown', (e) => {
+      if (gameOver) return;
+      isAiming = true;
+      startTouch = { x: e.clientX, y: e.clientY };
+      currentTouch = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isAiming) return;
+      currentTouch = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (!isAiming || gameOver) return;
+      isAiming = false;
+
+      // Calculate throw vector based on pull-back drag
+      let dx = currentTouch.x - startTouch.x;
+      let dy = currentTouch.y - startTouch.y;
+
+      throwPaper(dx, dy);
+    });
+
+    function throwPaper(dx, dy) {
+      playChiptune(880, 'square', 0.12);
+
+      let targetX = canvas.width / 2 + dx;
+      let targetY = canvas.height / 2 + dy;
+
+      let isHoming = homingCharges > 0;
+      if (isHoming) homingCharges--;
+
+      papers.push({
+        x: canvas.width / 2,
+        y: canvas.height - 100,
+        targetX: targetX,
+        targetY: targetY,
+        vx: dx * 0.15,
+        vy: dy * 0.15 - 8,
+        homing: isHoming,
+        life: 40
+      });
+    }
+
+    window.connectBLE = async function() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['cycling_speed_and_cadence']
         });
-      }
-
-      function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-      window.addEventListener('resize', resize);
-      resize();
-
-      function log(msg) {
-        const line = document.createElement('div');
-        line.innerText = '> ' + msg;
-        logConsole.appendChild(line);
-        logConsole.scrollTop = logConsole.scrollHeight;
-      }
-
-      window.toggleLogs = function() {
-        logConsole.style.display = logConsole.style.display === 'block' ? 'none' : 'block';
-      };
-
-      window.manualPedal = function() {
-        rpm = Math.min(140, rpm + 10);
-        playTone(200 + rpm * 2, 0.05);
-      };
-
-      window.throwPaper = function() {
-        playTone(500, 0.1);
-        papers.push({
-          x: canvas.width / 2,
-          y: canvas.height - 80,
-          vx: (Math.random() - 0.5) * 8 + (houses.length > 0 && houses[0].side === 'right' ? 8 : -8),
-          vy: -12,
-          life: 30
-        });
-
-        const target = houses.find(h => h.z < 300 && h.z > 50 && !h.delivered);
-        if (target) {
-          target.delivered = true;
-          score += 250;
-          document.getElementById('score').innerText = String(score).padStart(5, '0');
-          playTone(880, 0.2);
-        }
-      };
-
-      window.connectBLE = async function() {
-        log('Starting Bluetooth scan...');
-        try {
-          const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: ['cycling_speed_and_cadence']
-          });
-          log('Device selected: ' + device.name);
-          const server = await device.gatt.connect();
-          log('Connected to GATT Server.');
-          const service = await server.getPrimaryService('cycling_speed_and_cadence');
-          const char = await service.getCharacteristic('csc_measurement');
-          await char.startNotifications();
-          log('Subscribed to RPM data!');
-
-          let lastCrankRevs = null, lastCrankTime = null;
-          char.addEventListener('characteristicvaluechanged', (e) => {
-            const val = e.target.value;
-            const flags = val.getUint8(0);
-            if (flags & 0x02) {
-              const crankRevs = val.getUint16(1, true);
-              const crankTime = val.getUint16(3, true);
-              if (lastCrankTime !== null) {
-                let revDiff = crankRevs - lastCrankRevs;
-                let timeDiff = (crankTime - lastCrankTime) / 1024;
-                if (revDiff < 0) revDiff += 65536;
-                if (timeDiff < 0) timeDiff += 64;
-                if (timeDiff > 0) rpm = Math.round((revDiff / timeDiff) * 60);
-              }
-              lastCrankRevs = crankRevs;
-              lastCrankTime = crankTime;
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('cycling_speed_and_cadence');
+        const char = await service.getCharacteristic('csc_measurement');
+        await char.startNotifications();
+        
+        let lastCrankRevs = null, lastCrankTime = null;
+        char.addEventListener('characteristicvaluechanged', (e) => {
+          const val = e.target.value;
+          const flags = val.getUint8(0);
+          if (flags & 0x02) {
+            const crankRevs = val.getUint16(1, true);
+            const crankTime = val.getUint16(3, true);
+            if (lastCrankTime !== null) {
+              let revDiff = crankRevs - lastCrankRevs;
+              let timeDiff = (crankTime - lastCrankTime) / 1024;
+              if (revDiff < 0) revDiff += 65536;
+              if (timeDiff < 0) timeDiff += 64;
+              if (timeDiff > 0) rpm = Math.round((revDiff / timeDiff) * 60);
             }
-          });
-        } catch (err) {
-          log('BLE Error: ' + err.message);
+            lastCrankRevs = crankRevs;
+            lastCrankTime = crankTime;
+          }
+        });
+        alert("Connected!");
+      } catch (err) {
+        alert("BLE Error: " + err.message);
+      }
+    };
+
+    // Game timers & Spawns
+    setInterval(() => {
+      if (gameOver) return;
+      gameTime--;
+      document.getElementById('timer').innerText = gameTime;
+
+      if (doublePointsTimer > 0) doublePointsTimer--;
+
+      if (gameTime <= 0) {
+        endGame();
+      }
+    }, 1000);
+
+    // Spawning houses and power-ups at manageable pacing
+    setInterval(() => {
+      if (gameOver || rpm <= 5) return;
+      
+      const side = Math.random() > 0.5 ? 'right' : 'left';
+      houses.push({
+        z: 800, // Starts closer so it's fully visible and hit-able
+        side: side,
+        delivered: false,
+        color: side === 'right' ? '#e76f51' : '#264653'
+      });
+      totalHousesSpawned++;
+
+      // Occasionally spawn powerups in the road
+      if (Math.random() > 0.6) {
+        powerups.push({
+          z: 800,
+          type: Math.random() > 0.5 ? 'homing' : 'double',
+          xOffset: (Math.random() - 0.5) * 100
+        });
+      }
+    }, 3500); // Slower, comfortable spacing
+
+    setInterval(() => {
+      if (gameOver) return;
+      rpm = Math.max(0, rpm - 1);
+      document.getElementById('rpm').innerText = Math.round(rpm);
+    }, 400);
+
+    function endGame() {
+      gameOver = true;
+      document.getElementById('finalScore').innerText = score;
+      document.getElementById('finalHits').innerText = successfulHits;
+      document.getElementById('finalTotal').innerText = totalHousesSpawned;
+      let acc = totalHousesSpawned > 0 ? Math.round((successfulHits / totalHousesSpawned) * 100) : 0;
+      document.getElementById('finalAccuracy').innerText = acc + '%';
+      document.getElementById('recapModal').style.display = 'flex';
+      playChiptune(523.25, 'triangle', 0.5);
+    }
+
+    window.restartGame = function() {
+      score = 0;
+      hp = 3;
+      gameTime = 60;
+      gameOver = false;
+      houses = [];
+      papers = [];
+      powerups = [];
+      totalHousesSpawned = 0;
+      successfulHits = 0;
+      homingCharges = 0;
+      document.getElementById('recapModal').style.display = 'none';
+    };
+
+    // Main Render Loop
+    function render() {
+      const speed = rpm * 0.12;
+      distance += speed;
+
+      // Update Power-up text display
+      let puText = '';
+      if (homingCharges > 0) puText += `⭐Homing(${homingCharges}) `;
+      if (doublePointsTimer > 0) puText += `⚡2x(${doublePointsTimer}s)`;
+      document.getElementById('powerupStatus').innerText = puText;
+
+      // TurboGrafx Retro Sky
+      ctx.fillStyle = '#0f051d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+
+      // Distant mountains / grid lines
+      ctx.fillStyle = '#ff0055';
+      ctx.fillRect(0, canvas.height * 0.43, canvas.width, 4);
+
+      // Grass / Sidewalk
+      ctx.fillStyle = '#1b1b2f';
+      ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
+
+      // Road (Larger and wider for easy targeting)
+      const roadTopY = canvas.height * 0.45;
+      ctx.fillStyle = '#22223b';
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.40, roadTopY);
+      ctx.lineTo(canvas.width * 0.60, roadTopY);
+      ctx.lineTo(canvas.width * 0.95, canvas.height);
+      ctx.lineTo(canvas.width * 0.05, canvas.height);
+      ctx.fill();
+
+      // Road Center Stripe
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.setLineDash([30, 30]);
+      ctx.lineDashOffset = -distance % 60;
+      ctx.moveTo(canvas.width * 0.5, roadTopY);
+      ctx.lineTo(canvas.width * 0.5, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Render Power-ups on the road
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        let p = powerups[i];
+        p.z -= speed * 10 + 1;
+        if (p.z <= 0) {
+          powerups.splice(i, 1);
+          continue;
         }
-      };
 
-      // Decay loop
-      setInterval(() => {
-        rpm = Math.max(0, rpm - 1);
-        document.getElementById('rpm').innerText = Math.round(rpm);
-      }, 500);
+        let scale = 1 - (p.z / 800);
+        let py = roadTopY + (canvas.height - roadTopY) * scale;
+        let px = (canvas.width / 2) + (p.xOffset * scale);
 
-      // Render Loop
-      function render() {
-        const speed = rpm * 0.15;
-        distance += speed;
+        ctx.fillStyle = p.type === 'homing' ? '#ffff00' : '#ff00ff';
+        ctx.fillRect(px - 10, py - 10, 20, 20);
 
-        const now = performance.now();
-        // Dynamic interval: exactly 5000ms (5 seconds) when RPM is 60. Scales inversely with current RPM.
-        const targetSpawnInterval = rpm > 0 ? (300, 300000 / rpm) : Infinity;
+        // Auto pickup collision check
+        if (p.z < 50 && Math.abs(p.xOffset) < 40) {
+          if (p.type === 'homing') homingCharges += 2;
+          if (p.type === 'double') doublePointsTimer = 5;
+          playChiptune(660, 'square', 0.15);
+          powerups.splice(i, 1);
+        }
+      }
 
-        if (now - lastHouseSpawnTime >= targetSpawnInterval && rpm > 0) {
-          spawnHouse();
-          lastHouseSpawnTime = now;
+      // Render & Move Houses (Much larger & clearer)
+      for (let i = houses.length - 1; i >= 0; i--) {
+        let h = houses[i];
+        h.z -= speed * 10 + 1;
+
+        if (h.z <= 0) {
+          houses.splice(i, 1);
+          continue;
         }
 
-        // Sky
-        ctx.fillStyle = '#87CEEB';
-        ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+        let scale = 1 - (h.z / 800);
+        if (scale < 0.05) continue;
 
-        // Grass
-        ctx.fillStyle = '#94d2bd';
-        ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
+        let houseY = roadTopY + (canvas.height - roadTopY) * scale;
+        let roadWidthAtY = (canvas.width * 0.8) * scale;
+        let houseX = h.side === 'right' 
+          ? (canvas.width / 2) + (roadWidthAtY / 2) + (20 * scale)
+          : (canvas.width / 2) - (roadWidthAtY / 2) - (180 * scale);
 
-        // Road
-        const roadTopY = canvas.height * 0.45;
-        ctx.fillStyle = '#e9d8a6';
+        let width = 160 * scale;
+        let height = 120 * scale;
+
+        // Pixel House Body
+        ctx.fillStyle = h.delivered ? '#00ffff' : h.color;
+        ctx.fillRect(houseX, houseY - height, width, height);
+
+        // Roof
+        ctx.fillStyle = '#ff0055';
         ctx.beginPath();
-        ctx.moveTo(canvas.width * 0.48, roadTopY);
-        ctx.lineTo(canvas.width * 0.52, roadTopY);
-        ctx.lineTo(canvas.width * 0.85, canvas.height);
-        ctx.lineTo(canvas.width * 0.15, canvas.height);
+        ctx.moveTo(houseX - 10 * scale, houseY - height);
+        ctx.lineTo(houseX + width / 2, houseY - height - (50 * scale));
+        ctx.lineTo(houseX + width + 10 * scale, houseY - height);
         ctx.fill();
 
-        // Road Lines
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.setLineDash([20, 20]);
-        ctx.lineDashOffset = -distance % 40;
-        ctx.moveTo(canvas.width * 0.5, roadTopY);
-        ctx.lineTo(canvas.width * 0.5, canvas.height);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Render & Move Houses
-        for (let i = houses.length - 1; i >= 0; i--) {
-          let h = houses[i];
-          h.z -= speed * 12 + 2;
-
-          if (h.z <= 0) {
-            houses.splice(i, 1);
-            continue;
-          }
-
-          let scale = 1 - (h.z / 1000);
-          if (scale < 0.1) continue;
-
-          let houseY = roadTopY + (canvas.height - roadTopY) * scale;
-          let roadWidthAtY = (canvas.width * 0.7) * scale;
-          let houseX = h.side === 'right' 
-            ? (canvas.width / 2) + (roadWidthAtY / 2) + (40 * scale)
-            : (canvas.width / 2) - (roadWidthAtY / 2) - (120 * scale);
-
-          let width = 80 * scale;
-          let height = 60 * scale;
-
-          ctx.fillStyle = h.delivered ? '#2ec4b6' : h.color;
-          ctx.fillRect(houseX, houseY - height, width, height);
-
-          ctx.fillStyle = '#264653';
-          ctx.beginPath();
-          ctx.moveTo(houseX - 5 * scale, houseY - height);
-          ctx.lineTo(houseX + width / 2, houseY - height - (30 * scale));
-          ctx.lineTo(houseX + width + 5 * scale, houseY - height);
-          ctx.fill();
-
-          ctx.fillStyle = h.delivered ? '#ffb703' : '#e71d36';
-          let mbX = h.side === 'right' ? houseX - (15 * scale) : houseX + width + (5 * scale);
-          ctx.fillRect(mbX, houseY - (25 * scale), 12 * scale, 20 * scale);
-        }
-
-        // Render Newspapers
-        for (let i = papers.length - 1; i >= 0; i--) {
-          let p = papers[i];
-          p.x += p.vx;
-          p.y += p.vy;
-          p.life--;
-
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(p.x, p.y, 12, 8);
-
-          if (p.life <= 0) papers.splice(i, 1);
-        }
-
-        requestAnimationFrame(render);
+        // Mailbox Target
+        ctx.fillStyle = h.delivered ? '#00ff00' : '#ffff00';
+        let mbX = h.side === 'right' ? houseX - (30 * scale) : houseX + width + (10 * scale);
+        ctx.fillRect(mbX, houseY - (40 * scale), 24 * scale, 30 * scale);
       }
 
-      render();
-    });
+      // Render Flying Newspapers & Check Hits
+      for (let i = papers.length - 1; i >= 0; i--) {
+        let p = papers[i];
+
+        if (p.homing && houses.length > 0) {
+          // Homing logic: steer toward nearest active house mailbox
+          let nearest = houses.find(h => !h.delivered);
+          if (nearest) {
+            let targetScreenX = nearest.side === 'right' ? canvas.width * 0.75 : canvas.width * 0.25;
+            p.x += (targetScreenX - p.x) * 0.2;
+            p.y += (canvas.height * 0.6 - p.y) * 0.2;
+          }
+        } else {
+          p.x += p.vx;
+          p.y += p.vy;
+        }
+        p.life--;
+
+        // Draw Paper sprite
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(p.x, p.y, 16, 12);
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(p.x + 3, p.y + 3, 10, 6);
+
+        // Hit Detection against houses
+        for (let h of houses) {
+          if (!h.delivered && h.z < 350 && h.z > 50) {
+            let roadWidthAtY = (canvas.width * 0.8) * (1 - (h.z / 800));
+            let houseX = h.side === 'right' 
+              ? (canvas.width / 2) + (roadWidthAtY / 2) 
+              : (canvas.width / 2) - (roadWidthAtY / 2);
+
+            if (Math.abs(p.x - houseX) < 120) {
+              h.delivered = true;
+              successfulHits++;
+              let pts = 250 * (doublePointsTimer > 0 ? 2 : 1);
+              score += pts;
+              document.getElementById('score').innerText = String(score).padStart(5, '0');
+              playChiptune(1046.50, 'square', 0.2); // Success chime
+              papers.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        if (p.life <= 0) papers.splice(i, 1);
+      }
+
+      // Draw Aiming Reticle & Line when dragging
+      if (isAiming) {
+        ctx.strokeStyle = '#ff0055';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, canvas.height - 100);
+        ctx.lineTo(currentTouch.x, currentTouch.y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        ctx.arc(currentTouch.x, currentTouch.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      requestAnimationFrame(render);
+    }
+    render();
   </script>
 </body>
 </html>
