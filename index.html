@@ -6,19 +6,22 @@
   <title>Turbo Paperboy 16</title>
   <style>
     * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #111; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
     
     #gameCanvas {
       position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
       z-index: 1;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+      display: block;
     }
 
     .ui-layer {
       position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
       z-index: 10;
       pointer-events: none;
       display: flex;
@@ -34,15 +37,15 @@
     }
 
     .card {
-      background: rgba(0, 0, 0, 0.85);
-      border: 2px solid #ff0055;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ffff;
       padding: 8px 12px;
       border-radius: 4px;
       font-weight: bold;
       color: #00ffff;
-      font-size: 13px;
+      font-size: 14px;
       text-shadow: 2px 2px #000;
-      box-shadow: 0 0 10px rgba(255,0,85,0.4);
+      box-shadow: 0 0 10px rgba(0,255,255,0.4);
     }
 
     .controls {
@@ -130,7 +133,7 @@
     let startTouch = { x: 0, y: 0 };
     let currentTouch = { x: 0, y: 0 };
 
-    // Built-in TurboGrafx Chiptune Audio Synth Engine
+    // Audio Engine
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let musicInterval = null;
 
@@ -277,7 +280,6 @@
       }
     }, 1000);
 
-    // Spawning houses further out on the horizon (z = 1500)
     setInterval(() => {
       if (gameOver || rpm <= 5) return;
       
@@ -286,7 +288,7 @@
         z: 1500,
         side: side,
         delivered: false,
-        color: side === 'right' ? '#e76f51' : '#264653'
+        color: side === 'right' ? '#ff6b6b' : '#4ea8de'
       });
       totalHousesSpawned++;
 
@@ -332,7 +334,6 @@
     };
 
     function render() {
-      // Reduced speed factor for relaxed pacing
       const speed = rpm * 0.06;
       distance += speed;
 
@@ -341,17 +342,94 @@
       if (doublePointsTimer > 0) puText += `⚡2x(${doublePointsTimer}s)`;
       document.getElementById('powerupStatus').innerText = puText;
 
-      ctx.fillStyle = '#0f051d';
+      // Clear & Draw Sky
+      ctx.fillStyle = '#240046';
       ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
 
-      ctx.fillStyle = '#ff0055';
-      ctx.fillRect(0, canvas.height * 0.43, canvas.width, 4);
+      // Horizon Glow Line
+      ctx.fillStyle = '#ff007f';
+      ctx.fillRect(0, canvas.height * 0.43, canvas.width, 6);
 
-      ctx.fillStyle = '#1b1b2f';
+      // Grass/Sidewalk
+      ctx.fillStyle = '#38b000';
       ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
 
+      // Road
       const roadTopY = canvas.height * 0.45;
-      ctx.fillStyle = '#22223b';
+      ctx.fillStyle = '#495057';
       ctx.beginPath();
       ctx.moveTo(canvas.width * 0.40, roadTopY);
-      ctx.lineTo(canvas.width * 0
+      ctx.lineTo(canvas.width * 0.60, roadTopY);
+      ctx.lineTo(canvas.width * 0.95, canvas.height);
+      ctx.lineTo(canvas.width * 0.05, canvas.height);
+      ctx.fill();
+
+      // Road Center Stripe
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.setLineDash([30, 30]);
+      ctx.lineDashOffset = -distance % 60;
+      ctx.moveTo(canvas.width * 0.5, roadTopY);
+      ctx.lineTo(canvas.width * 0.5, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        let p = powerups[i];
+        p.z -= speed * 8 + 1;
+        if (p.z <= 0) {
+          powerups.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (p.z / 1500);
+        let py = roadTopY + (canvas.height - roadTopY) * scale;
+        let px = (canvas.width / 2) + (p.xOffset * scale);
+
+        ctx.fillStyle = p.type === 'homing' ? '#ffea00' : '#d81159';
+        ctx.fillRect(px - (12 * scale), py - (12 * scale), 24 * scale, 24 * scale);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px - (12 * scale), py - (12 * scale), 24 * scale, 24 * scale);
+
+        if (p.z < 50 && Math.abs(p.xOffset) < 40) {
+          if (p.type === 'homing') homingCharges += 2;
+          if (p.type === 'double') doublePointsTimer = 5;
+          playSFX(660, 'square', 0.15);
+          powerups.splice(i, 1);
+        }
+      }
+
+      for (let i = houses.length - 1; i >= 0; i--) {
+        let h = houses[i];
+        h.z -= speed * 8 + 1;
+
+        if (h.z <= 0) {
+          houses.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (h.z / 1500);
+        if (scale < 0.03) continue;
+
+        let houseY = roadTopY + (canvas.height - roadTopY) * scale;
+        let roadWidthAtY = (canvas.width * 0.8) * scale;
+        let houseX = h.side === 'right' 
+          ? (canvas.width / 2) + (roadWidthAtY / 2) + (20 * scale)
+          : (canvas.width / 2) - (roadWidthAtY / 2) - (180 * scale);
+
+        let width = 160 * scale;
+        let height = 120 * scale;
+
+        ctx.fillStyle = h.delivered ? '#00f5d4' : h.color;
+        ctx.fillRect(houseX, houseY - height, width, height);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(houseX, houseY - height, width, height);
+
+        ctx.fillStyle = '#ff007f';
+        ctx.beginPath();
+        ctx.moveTo(houseX - 10 * scale, houseY - height);
+        ctx.lineTo(houseX + width / 2, houseY - height - (50 * scale));
+        ctx.lineTo(houseX +
