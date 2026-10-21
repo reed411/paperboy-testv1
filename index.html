@@ -6,12 +6,15 @@
   <title>Turbo Paperboy 16</title>
   <style>
     * { box-sizing: border-box; touch-action: none; margin: 0; padding: 0; user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Courier New', monospace; background: #240046; }
     
     #gameCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
       display: block;
-      width: 100vw;
-      height: 100vh;
       background: #240046;
     }
 
@@ -117,9 +120,13 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Set fixed virtual resolution for clean rendering on all screens
-    canvas.width = 800;
-    canvas.height = 600;
+    // Force canvas pixel resolution to match window dimensions cleanly
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     let score = 0, rpm = 50, distance = 0;
     let gameTime = 60;
@@ -186,27 +193,16 @@
       playSFX(440, 'square', 0.05);
     };
 
-    // Screen mapping helper for touch input
-    function getCanvasCoords(e) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: (e.clientX - rect.left) * (canvas.width / rect.width),
-        y: (e.clientY - rect.top) * (canvas.height / rect.height)
-      };
-    }
-
     canvas.addEventListener('pointerdown', (e) => {
       if (gameOver) return;
       isAiming = true;
-      let pos = getCanvasCoords(e);
-      startTouch = { x: pos.x, y: pos.y };
-      currentTouch = { x: pos.x, y: pos.y };
+      startTouch = { x: e.clientX, y: e.clientY };
+      currentTouch = { x: e.clientX, y: e.clientY };
     });
 
     canvas.addEventListener('pointermove', (e) => {
       if (!isAiming) return;
-      let pos = getCanvasCoords(e);
-      currentTouch = { x: pos.x, y: pos.y };
+      currentTouch = { x: e.clientX, y: e.clientY };
     });
 
     canvas.addEventListener('pointerup', (e) => {
@@ -224,7 +220,7 @@
 
       papers.push({
         x: canvas.width / 2,
-        y: canvas.height - 80,
+        y: canvas.height - 100,
         vx: dx * 0.15,
         vy: dy * 0.15 - 6,
         homing: isHoming,
@@ -264,4 +260,251 @@
         });
         alert("Connected!");
       } catch (err) {
-        alert("BLE Error: " + err.message
+        alert("BLE Error: " + err.message);
+      }
+    };
+
+    // Game Timer
+    setInterval(() => {
+      if (gameOver) return;
+      gameTime--;
+      document.getElementById('timer').innerText = gameTime;
+      if (doublePointsTimer > 0) doublePointsTimer--;
+      if (gameTime <= 0) endGame();
+    }, 1000);
+
+    // House Spawning (z = 1500 for early horizon visibility)
+    setInterval(() => {
+      if (gameOver) return;
+      const side = Math.random() > 0.5 ? 'right' : 'left';
+      houses.push({
+        z: 1500,
+        side: side,
+        delivered: false,
+        color: side === 'right' ? '#ff6b6b' : '#4ea8de'
+      });
+      totalHousesSpawned++;
+
+      if (Math.random() > 0.5) {
+        powerups.push({
+          z: 1500,
+          type: Math.random() > 0.5 ? 'homing' : 'double',
+          xOffset: (Math.random() - 0.5) * 120
+        });
+      }
+    }, 3500);
+
+    setInterval(() => {
+      if (gameOver) return;
+      rpm = Math.max(35, rpm - 1);
+      document.getElementById('rpm').innerText = rpm;
+    }, 600);
+
+    function endGame() {
+      gameOver = true;
+      if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+      document.getElementById('finalScore').innerText = score;
+      document.getElementById('finalHits').innerText = successfulHits;
+      document.getElementById('finalTotal').innerText = totalHousesSpawned;
+      let acc = totalHousesSpawned > 0 ? Math.round((successfulHits / totalHousesSpawned) * 100) : 0;
+      document.getElementById('finalAccuracy').innerText = acc + '%';
+      document.getElementById('recapModal').style.display = 'flex';
+    }
+
+    window.restartGame = function() {
+      score = 0;
+      gameTime = 60;
+      gameOver = false;
+      houses = [];
+      papers = [];
+      powerups = [];
+      totalHousesSpawned = 0;
+      successfulHits = 0;
+      homingCharges = 0;
+      rpm = 50;
+      document.getElementById('recapModal').style.display = 'none';
+      startMusic();
+    };
+
+    function render() {
+      const speed = rpm * 0.05; // Gentle, comfortable cruising speed
+      distance += speed;
+
+      let puText = '';
+      if (homingCharges > 0) puText += `⭐Homing(${homingCharges}) `;
+      if (doublePointsTimer > 0) puText += `⚡2x(${doublePointsTimer}s)`;
+      document.getElementById('powerupStatus').innerText = puText;
+
+      // Sky
+      ctx.fillStyle = '#240046';
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+
+      // Horizon Line
+      ctx.fillStyle = '#ff007f';
+      ctx.fillRect(0, canvas.height * 0.43, canvas.width, 6);
+
+      // Grass
+      ctx.fillStyle = '#38b000';
+      ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
+
+      // Road
+      const roadTopY = canvas.height * 0.45;
+      ctx.fillStyle = '#495057';
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.35, roadTopY);
+      ctx.lineTo(canvas.width * 0.65, roadTopY);
+      ctx.lineTo(canvas.width * 0.95, canvas.height);
+      ctx.lineTo(canvas.width * 0.05, canvas.height);
+      ctx.fill();
+
+      // Road Stripe
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.setLineDash([30, 30]);
+      ctx.lineDashOffset = -distance % 60;
+      ctx.moveTo(canvas.width * 0.5, roadTopY);
+      ctx.lineTo(canvas.width * 0.5, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Power-ups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        let p = powerups[i];
+        p.z -= speed * 8 + 1;
+        if (p.z <= 0) {
+          powerups.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (p.z / 1500);
+        let py = roadTopY + (canvas.height - roadTopY) * scale;
+        let px = (canvas.width / 2) + (p.xOffset * scale);
+
+        ctx.fillStyle = p.type === 'homing' ? '#ffea00' : '#d81159';
+        ctx.fillRect(px - (14 * scale), py - (14 * scale), 28 * scale, 28 * scale);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px - (14 * scale), py - (14 * scale), 28 * scale, 28 * scale);
+
+        if (p.z < 60 && Math.abs(p.xOffset) < 50) {
+          if (p.type === 'homing') homingCharges += 2;
+          if (p.type === 'double') doublePointsTimer = 5;
+          playSFX(660, 'square', 0.15);
+          powerups.splice(i, 1);
+        }
+      }
+
+      // Houses
+      for (let i = houses.length - 1; i >= 0; i--) {
+        let h = houses[i];
+        h.z -= speed * 8 + 1;
+
+        if (h.z <= 0) {
+          houses.splice(i, 1);
+          continue;
+        }
+
+        let scale = 1 - (h.z / 1500);
+        if (scale < 0.02) continue;
+
+        let houseY = roadTopY + (canvas.height - roadTopY) * scale;
+        let roadWidthAtY = (canvas.width * 0.6) * scale;
+        let houseX = h.side === 'right' 
+          ? (canvas.width / 2) + (roadWidthAtY / 2) + (20 * scale)
+          : (canvas.width / 2) - (roadWidthAtY / 2) - (180 * scale);
+
+        let width = 160 * scale;
+        let height = 120 * scale;
+
+        ctx.fillStyle = h.delivered ? '#00f5d4' : h.color;
+        ctx.fillRect(houseX, houseY - height, width, height);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(houseX, houseY - height, width, height);
+
+        ctx.fillStyle = '#ff007f';
+        ctx.beginPath();
+        ctx.moveTo(houseX - 10 * scale, houseY - height);
+        ctx.lineTo(houseX + width / 2, houseY - height - (50 * scale));
+        ctx.lineTo(houseX + width + 10 * scale, houseY - height);
+        ctx.fill();
+
+        ctx.fillStyle = h.delivered ? '#70e000' : '#ffb703';
+        let mbX = h.side === 'right' ? houseX - (30 * scale) : houseX + width + (10 * scale);
+        ctx.fillRect(mbX, houseY - (40 * scale), 28 * scale, 34 * scale);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(mbX, houseY - (40 * scale), 28 * scale, 34 * scale);
+      }
+
+      // Papers
+      for (let i = papers.length - 1; i >= 0; i--) {
+        let p = papers[i];
+
+        if (p.homing && houses.length > 0) {
+          let nearest = houses.find(h => !h.delivered);
+          if (nearest) {
+            let targetScreenX = nearest.side === 'right' ? canvas.width * 0.75 : canvas.width * 0.25;
+            p.x += (targetScreenX - p.x) * 0.2;
+            p.y += (canvas.height * 0.6 - p.y) * 0.2;
+          }
+        } else {
+          p.x += p.vx;
+          p.y += p.vy;
+        }
+        p.life--;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(p.x, p.y, 20, 14);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x, p.y, 20, 14);
+
+        for (let h of houses) {
+          if (!h.delivered && h.z < 400 && h.z > 40) {
+            let roadWidthAtY = (canvas.width * 0.6) * (1 - (h.z / 1500));
+            let houseX = h.side === 'right' 
+              ? (canvas.width / 2) + (roadWidthAtY / 2) 
+              : (canvas.width / 2) - (roadWidthAtY / 2);
+
+            if (Math.abs(p.x - houseX) < 150) {
+              h.delivered = true;
+              successfulHits++;
+              let pts = 250 * (doublePointsTimer > 0 ? 2 : 1);
+              score += pts;
+              document.getElementById('score').innerText = String(score).padStart(5, '0');
+              playSFX(1046.50, 'square', 0.2);
+              papers.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        if (p.life <= 0) papers.splice(i, 1);
+      }
+
+      // Aiming Reticle
+      if (isAiming) {
+        ctx.strokeStyle = '#ff007f';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, canvas.height - 100);
+        ctx.lineTo(currentTouch.x, currentTouch.y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#00f5d4';
+        ctx.beginPath();
+        ctx.arc(currentTouch.x, currentTouch.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(render);
+    }
+    render();
+  </script>
+</body>
+</html>
