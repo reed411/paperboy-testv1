@@ -127,8 +127,8 @@
       const ctx = canvas.getContext('2d');
       const logConsole = document.getElementById('logConsole');
 
-      let hp = 3, score = 0, rpm = 0, distance = 0;
-      let playerX = 0;
+      let hp = 3, score = 0, rpm = 60, distance = 0; // Default to 60 RPM
+      let lastHouseSpawnTime = performance.now();
 
       // Audio synth
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -145,14 +145,13 @@
         osc.stop(audioCtx.currentTime + duration);
       }
 
-      // Houses array & Papers array
       let houses = [];
       let papers = [];
 
       function spawnHouse() {
         const side = Math.random() > 0.5 ? 'right' : 'left';
         houses.push({
-          z: 1000, // Distance ahead
+          z: 1000,
           side: side,
           delivered: false,
           color: side === 'right' ? '#f4a261' : '#e76f51'
@@ -178,7 +177,7 @@
       };
 
       window.manualPedal = function() {
-        rpm = Math.min(140, rpm + 15);
+        rpm = Math.min(140, rpm + 10);
         playTone(200 + rpm * 2, 0.05);
       };
 
@@ -192,13 +191,12 @@
           life: 30
         });
 
-        // Check delivery hit on nearest house
         const target = houses.find(h => h.z < 300 && h.z > 50 && !h.delivered);
         if (target) {
           target.delivered = true;
           score += 250;
           document.getElementById('score').innerText = String(score).padStart(5, '0');
-          playTone(880, 0.2); // Hit jingle
+          playTone(880, 0.2);
         }
       };
 
@@ -240,23 +238,25 @@
         }
       };
 
-      // Spawning loop
-      setInterval(() => {
-        if (rpm > 10 && Math.random() > 0.4) {
-          spawnHouse();
-        }
-      }, 1500);
-
       // Decay loop
       setInterval(() => {
-        rpm = Math.max(0, rpm - 2);
+        rpm = Math.max(0, rpm - 1);
         document.getElementById('rpm').innerText = Math.round(rpm);
-      }, 150);
+      }, 500);
 
       // Render Loop
       function render() {
         const speed = rpm * 0.15;
         distance += speed;
+
+        const now = performance.now();
+        // Dynamic interval: exactly 5000ms (5 seconds) when RPM is 60. Scales inversely with current RPM.
+        const targetSpawnInterval = rpm > 0 ? (300, 300000 / rpm) : Infinity;
+
+        if (now - lastHouseSpawnTime >= targetSpawnInterval && rpm > 0) {
+          spawnHouse();
+          lastHouseSpawnTime = now;
+        }
 
         // Sky
         ctx.fillStyle = '#87CEEB';
@@ -309,11 +309,9 @@
           let width = 80 * scale;
           let height = 60 * scale;
 
-          // House Body
           ctx.fillStyle = h.delivered ? '#2ec4b6' : h.color;
           ctx.fillRect(houseX, houseY - height, width, height);
 
-          // Roof
           ctx.fillStyle = '#264653';
           ctx.beginPath();
           ctx.moveTo(houseX - 5 * scale, houseY - height);
@@ -321,13 +319,12 @@
           ctx.lineTo(houseX + width + 5 * scale, houseY - height);
           ctx.fill();
 
-          // Mailbox
           ctx.fillStyle = h.delivered ? '#ffb703' : '#e71d36';
           let mbX = h.side === 'right' ? houseX - (15 * scale) : houseX + width + (5 * scale);
           ctx.fillRect(mbX, houseY - (25 * scale), 12 * scale, 20 * scale);
         }
 
-        // Render Flying Newspapers
+        // Render Newspapers
         for (let i = papers.length - 1; i >= 0; i--) {
           let p = papers[i];
           p.x += p.vx;
